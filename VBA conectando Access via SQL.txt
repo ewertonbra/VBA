@@ -1,0 +1,347 @@
+Public executado As Boolean
+
+Sub main()
+    
+    With Application
+        .ScreenUpdating = False
+        .DisplayAlerts = False
+    End With
+    
+    executado = False
+    
+    Sheets("ZV49").Visible = True
+    Sheets("Encerrante").Visible = True
+
+    Call ImportarRel
+    
+    If executado = True Then
+    
+        Sheets("ZV49").Select
+        Call AtualizarMovto
+        
+        Sheets("Encerrante").Select
+        Call AtualizarMovto
+        
+    '    Sheets("Select").Select
+       ' Call SelecionarTudoMovto
+    
+        MsgBox "Acess atualizado com sucesso!"
+        
+    End If
+
+    Sheets("Conversor-tbMovto").Select
+    Sheets("ZV49").Visible = False
+    Sheets("Encerrante").Visible = False
+
+End Sub
+
+Sub SelecionarTudoMovto()
+
+    Dim sql As String
+    Dim cn As ADODB.Connection
+    Dim rs As ADODB.Recordset
+    
+    Set cn = New ADODB.Connection 'definindo a conexão com o banco de dados
+    sql = ActiveWorkbook.Path & "\dbConciliacao.mdb"
+    
+    With cn
+        .ConnectionString = "Provider=Microsoft.Jet.Oledb.4.0; Data source=" & sql & ";Jet OLEDB:Database Password="
+        .Open
+    End With
+    
+    'definindo um novo objeto recordset
+    Set rs = New ADODB.Recordset
+    
+    'definindo a instrução sql
+    sql = "SELECT * FROM tbMovto;"
+    'MsgBox sql
+    rs.Open sql, cn
+    
+    i = 2
+    If Not rs.EOF Then
+        Do While Not rs.EOF
+            Range("A" & i).Value = rs(0)
+            Range("B" & i).Value = rs(1)
+            Range("C" & i).Value = Format(rs(2), "dd/mm/yyyy hh:mm:ss")
+            Range("D" & i).Value = Format(rs(3), "dd/mm/yyyy")
+            Range("E" & i).Value = rs(4)
+            Range("F" & i).Value = rs(5)
+            Range("G" & i).Value = rs(6)
+            Range("H" & i).Value = rs(7)
+            Range("I" & i).Value = rs(8)
+            Range("J" & i).Value = rs(9)
+            rs.MoveNext
+            i = i + 1
+        Loop
+    End If
+    
+    cn.Close
+    
+    SelectSQL = Resultado
+
+End Sub
+
+Type cargaResumo
+    filial As String
+    prod As String
+    vol As String
+    dt As String
+End Type
+
+Type cargaReconc
+    prod As String
+    vol As String
+    dt As String
+End Type
+
+Public nomeBD As String
+
+Sub ImportarRel()
+
+    Dim strPath As String, nomeGuiaDestino As String
+    Dim intChoice As Integer, i As Integer
+    Dim sh As Worksheet
+    
+    nomeBD = ActiveWorkbook.Name
+    Set sh = ActiveSheet
+        
+    With Application
+        .ScreenUpdating = False
+        .DisplayAlerts = False
+        .FileDialog(msoFileDialogOpen).AllowMultiSelect = True
+        ' Define o título da janela
+        .FileDialog(msoFileDialogOpen).Title = _
+        "Favor selecionar os relatórios para importar no sistema"
+        ' Define o caminho inicial da pesquisa
+        .FileDialog(msoFileDialogOpen).InitialFileName = ActiveWorkbook.Path & "\Cargas.xls"
+    End With
+    
+    Call limpar("ZV49")
+    Call limpar("Encerrante")
+    Call Application.FileDialog(msoFileDialogOpen).Filters.Clear
+    Call Application.FileDialog(msoFileDialogOpen).Filters.Add("Relatório em Excel", "*.xl*")
+    intChoice = Application.FileDialog(msoFileDialogOpen).Show
+    
+    If intChoice <> 0 Then
+        executado = True
+        For i = 1 To Application.FileDialog(msoFileDialogOpen).SelectedItems.Count
+            strPath = Application.FileDialog(msoFileDialogOpen).SelectedItems(i)
+            If strPath <> ActiveWorkbook.FullName Then
+                Workbooks.Open Filename:=strPath
+                strPath = ActiveWorkbook.Name
+                If Range("D2").Value = "Resumo Diário" Then
+                    Call tratarResumoDiario
+                End If
+                If Range("H2").Value = "Reconciliação de Medidores" Then
+                    Call tratarReconciliacao
+                End If
+                Windows(strPath).Close
+            End If
+        Next i
+    End If
+    
+    sh.Activate
+    'MsgBox "Relatórios importados com sucesso!"
+        
+End Sub
+
+Private Sub tratarResumoDiario()
+
+    Dim cResumo() As cargaResumo
+    Dim ws As Worksheet
+    Dim i As Long, j As Long
+    
+    j = 1
+    
+    For Each ws In ActiveWorkbook.Worksheets
+        ws.Activate
+        i = 12
+        If Range("B11").Value = "" Then Range("B11").EntireRow.Delete
+        
+        Do While Range("C" & i).Value <> ""
+            ReDim Preserve cResumo(1 To j)
+            
+            With cResumo(j)
+                .filial = Range("B11").Value
+                .prod = Range("C" & i).Value
+                .vol = Range("E" & i).Value
+                .dt = Replace(Range("k8").Value, "Posição em: ", "")
+            End With
+            
+            j = j + 1
+            i = i + 1
+        Loop
+        
+    Next
+    
+    Windows(nomeBD).Activate
+    With Sheets("ZV49")
+        .Select
+        .Visible = True
+    End With
+    If Range("A2").Value <> "" Then
+        Range("A1").Select
+        Range(Selection, ActiveCell.SpecialCells(xlLastCell)).Select
+        Selection.EntireRow.Delete
+    End If
+
+    For j = 1 To UBound(cResumo)
+        Range("A" & j + 1).Value = cResumo(j).filial
+        Range("B" & j + 1).Value = cResumo(j).prod
+        Range("C" & j + 1).Value = cResumo(j).vol * 1
+        Range("D" & j + 1).Value = cResumo(j).dt
+    Next
+
+End Sub
+
+Private Sub tratarReconciliacao()
+    
+    Dim cReconc() As cargaReconc
+    Dim ws As Worksheet
+    Dim i As Long, j As Long
+    
+    j = 1
+    
+    For Each ws In ActiveWorkbook.Worksheets
+        ws.Activate
+        i = 13
+        If Range("C13").Value = "" Then Range("C13").EntireRow.Delete
+        Do While Range("C" & i).Value <> ""
+            If UCase(Range("C" & i).Value) = "TOTAL" Then
+                ReDim Preserve cReconc(1 To j)
+                
+                With cReconc(j)
+                    .prod = Range("C13").Value
+                    .vol = Range("G" & i).Value
+                     .dt = Replace(Range("q8").Value, "Posição em: ", "")
+                End With
+                
+                j = j + 1
+                Exit Do
+            End If
+            i = i + 1
+        Loop
+    Next
+    
+    Windows(nomeBD).Activate
+    With Sheets("Encerrante")
+        .Visible = True
+        .Select
+    End With
+    If Range("A2").Value <> "" Then
+        Range("A1").Select
+        Range(Selection, ActiveCell.SpecialCells(xlLastCell)).Select
+        Selection.EntireRow.Delete
+    End If
+    
+    For j = 1 To UBound(cReconc)
+        Range("B" & j + 1).Value = cReconc(j).prod
+        Range("C" & j + 1).Value = cReconc(j).vol * 1
+        Range("D" & j + 1).Value = cReconc(j).dt
+    Next
+End Sub
+
+Sub limpar(NomeGuia As String)
+
+    Sheets(NomeGuia).Select
+    If Range("A2").Value <> "" Then
+        Range("A2").Select
+        Range(Selection, ActiveCell.SpecialCells(xlLastCell)).Select
+        Selection.EntireRow.Delete
+        Range("A1").Select
+    End If
+    
+End Sub
+
+Private Declare Function GetUserName Lib "advapi32.dll" Alias "GetUserNameA" (ByVal lpBuffer As String, nSize As Long) As Long
+Private Declare Function GetComputerName Lib "kernel32" Alias "GetComputerNameA" (ByVal lpBuffer As String, nSize As Long) As Long
+Global db As New Connection
+
+Sub AtualizarMovto()
+
+    Dim vSql As String, nUser As String, guia As String
+    Dim cn As ADODB.Connection
+    Dim tb As ADODB.Recordset
+    Dim ultCel As Long: ultCel = 2
+    
+    On Error GoTo ErroConexao
+    
+    nUser = StationName() & "\" & UserName()
+    
+    Set cn = New ADODB.Connection 'definindo a conexão com o banco de dados
+    vSql = ActiveWorkbook.Path & "\dbConciliacao.mdb"
+    
+    With cn
+        .ConnectionString = "Provider=Microsoft.Jet.Oledb.4.0; Data source=" & vSql & ";Jet OLEDB:Database Password="
+        .Open
+    End With
+    
+    Set tb = New ADODB.Recordset
+    
+    guia = ActiveSheet.Name
+    
+    While Range("F" & ultCel).Value <> ""
+        
+        If Range("F" & ultCel).Value <> "Não inserir" Then
+            vSql = "SELECT xdtDados,xDescr,xProd,xQtd FROM tbMovto WHERE "
+            vSql = vSql + "xdtDados = " & Replace(Format(Range("D" & ultCel).Value, "0"), ",", ".") & " AND "
+            vSql = vSql + "xDescr = '" & Range("F" & ultCel).Value & "' AND "
+            vSql = vSql + "xProd = '" & Range("E" & ultCel).Value & "';"
+            tb.Open vSql, cn
+            
+            If Not tb.EOF Then
+                vSql = "UPDATE tbMovto SET"
+                vSql = vSql & " xUser ='" & nUser & "',"
+                vSql = vSql & " xdtLanc =" & Replace(Format(Now(), "0.000000"), ",", ".") & ","
+                vSql = vSql & " xdtDados =" & Replace(Format(Range("D" & ultCel).Value, "0"), ",", ".") & ","
+                vSql = vSql & " xDescr ='" & Range("F" & ultCel).Value & "',"
+                vSql = vSql & " xProd ='" & Range("E" & ultCel).Value & "',"
+                vSql = vSql & " xQtd =" & Range("C" & ultCel).Value * 1 & ","
+                vSql = vSql & " xTipo ='O',"
+                vSql = vSql & " xInfluencia ='" & guia & "'"
+                vSql = vSql & "WHERE ("
+                vSql = vSql + " xdtDados = " & Replace(Format(Range("D" & ultCel).Value, "0"), ",", ".") & " AND "
+                vSql = vSql + " xDescr = '" & Range("F" & ultCel).Value & "' AND "
+                vSql = vSql + " xProd = '" & Range("E" & ultCel).Value & "'); "
+                'vSql = vSql + " xQtd = " & Range("C" & ultCel).Value * 1 & ");"
+            Else
+                vSql = "INSERT INTO tbMovto (xUser,xdtLanc,xdtDados,xDescr,xProd,xQtd,xTipo,xInfluencia) VALUES "
+                vSql = vSql & "('" & nUser & "'," 'User
+                vSql = vSql & Replace(Format(Now(), "0.000000"), ",", ".") & "," 'Lanc
+                vSql = vSql & Replace(Format(Range("D" & ultCel).Value, "0"), ",", ".") & ",'" 'Dados
+                vSql = vSql & Range("F" & ultCel).Value & "','" 'Desc
+                vSql = vSql & Range("E" & ultCel).Value & "'," 'Prod
+                vSql = vSql & Range("C" & ultCel).Value * 1 & ",'" 'Qtd"
+                vSql = vSql & "O','" 'Tipo
+                vSql = vSql & guia & "');"  'Influencia
+            End If
+            tb.Close
+            cn.Execute vSql
+        End If
+        
+        ultCel = ultCel + 1
+        
+    Wend
+    
+   ' MsgBox "Dados atualizados com sucesso!"
+   executado = True
+
+Exit Sub
+    
+ErroConexao:
+    MsgBox "Não foi possível conectar-se à base de dados (dbConciliacao.mdb)." & vbCrLf & Err.Description
+End Sub
+
+Function UserName() As Variant
+    Dim sBuffer As String, lSize As Long
+    sBuffer = Space(255): lSize = Len(sBuffer)
+    Call GetUserName(sBuffer, lSize)
+    UserName = Left$(sBuffer, lSize - 1)
+End Function
+
+Function StationName() As Variant
+    Dim sBuffer As String, lSize As Long
+    sBuffer = Space(16): lSize = Len(sBuffer)
+    Call GetComputerName(sBuffer, lSize)
+    StationName = Left$(sBuffer, lSize)
+End Function
