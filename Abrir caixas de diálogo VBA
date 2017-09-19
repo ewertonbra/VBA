@@ -1,0 +1,43 @@
+Sub ImportarRel()
+
+    Dim strPath As String, nomeGuiaDestino As String
+    Dim intChoice As Integer, i As Integer
+    Dim sh As Worksheet
+    
+    nomeBD = ActiveWorkbook.Name
+    Set sh = ActiveSheet
+        
+    With Application
+        .ScreenUpdating = False
+        .DisplayAlerts = False
+        .FileDialog(msoFileDialogOpen).AllowMultiSelect = True
+        ' Define o título da janela
+        .FileDialog(msoFileDialogOpen).Title = _
+        "Favor selecionar os relatórios para importar no sistema"
+        ' Define o caminho inicial da pesquisa
+        .FileDialog(msoFileDialogOpen).InitialFileName = ActiveWorkbook.Path & "\Cargas.xls"
+    End With
+    
+    Call limpar("ZV49")
+    Call limpar("Encerrante")
+    Call Application.FileDialog(msoFileDialogOpen).Filters.Clear
+    Call Application.FileDialog(msoFileDialogOpen).Filters.Add("Relatório em Excel", "*.xl*")
+    intChoice = Application.FileDialog(msoFileDialogOpen).Show
+    
+    If intChoice <> 0 Then
+        executado = True
+        For i = 1 To Application.FileDialog(msoFileDialogOpen).SelectedItems.Count
+            strPath = Application.FileDialog(msoFileDialogOpen).SelectedItems(i)
+            If strPath <> ActiveWorkbook.FullName Then
+                Workbooks.Open Filename:=strPath
+                strPath = ActiveWorkbook.Name
+				' TODO
+                Windows(strPath).Close
+            End If
+        Next i
+    End If
+    
+    sh.Activate
+    'MsgBox "Relatórios importados com sucesso!"
+        
+End Sub
