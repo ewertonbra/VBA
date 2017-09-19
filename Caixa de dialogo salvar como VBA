@@ -1,0 +1,28 @@
+Sub mainTest()
+	Dim caminho As String
+	caminho = ActiveWorkbook.Path
+	Call ExibeCaixaDialogo("teste.xls", caminho)
+End sub
+
+Sub ExibeCaixaDialogo(nomeArquivo, endereco As String)
+
+    Dim SalvarComo As FileDialog
+    Set SalvarComo = Application.FileDialog(msoFileDialogSaveAs)
+
+    With SalvarComo
+    
+        '.InitialFileName = endereco & "\" & nomeArquivo
+        
+        .InitialFileName = "C:\Temp\" & nomeArquivo
+        
+        .InitialView = msoFileDialogViewDetails
+
+        .FilterIndex = 15
+        
+        .Show
+        
+        .Execute
+                
+    End With
+
+End Sub
