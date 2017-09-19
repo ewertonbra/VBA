@@ -1,0 +1,23 @@
+Sub copydata()
+    Const ppLayoutBlank = 12
+     
+    Dim objWorkSheet As Worksheet
+    Dim objRange As Range
+    Set objWorkSheet = ThisWorkbook.ActiveSheet
+    Set objRange = objWorkSheet.UsedRange
+    objRange.Copy
+     
+    Dim objPPT As PowerPoint.Application
+    Dim objPresentation As Presentation
+    Set objPPT = CreateObject("PowerPoint.Application")
+    objPPT.Visible = True
+     
+    Set objPresentation = objPPT.Presentations.Add
+    Set objSlide = objPresentation.Slides.Add(1, 1)
+     
+    objPresentation.Slides(1).Layout = ppLayoutBlank
+     
+    ' paste as the meta file
+    objPPT.Windows(1).View.PasteSpecial ppPasteMetafilePicture, msoTrue, , , "testlabel"
+    objPresentation.SaveAs "D:\MyPres.pptx"
+End Sub
