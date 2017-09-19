@@ -1,0 +1,19 @@
+Function fatorialRecursivo(num As Long) As Long
+
+    If (num = 0) Then
+        fatorialRecursivo = 1
+    Else
+        fatorialRecursivo = num * fatorialRecursivo(num - 1)
+    End If
+
+End Function
+
+Function seqFibonacci(num As Long) As Long
+
+    If (num < 2) Then
+        seqFibonacci = num
+    Else
+        seqFibonacci = seqFibonacci(num - 1) + seqFibonacci(num - 2)
+    End If
+    
+End Function
