@@ -1,0 +1,10 @@
+Sub Index()
+
+    Dim i As Integer
+    
+    For i = 1 To ActiveWorkbook.Sheets.Count
+        Range("A" & i + 1).Value = Sheets(i).Name
+        ActiveSheet.Hyperlinks.Add Anchor:=Range("A" & i + 1), Address:="", SubAddress:=Sheets(i).Name & "!A1"
+    Next i
+
+End Sub
