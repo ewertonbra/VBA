@@ -1,0 +1,356 @@
+Public Caminho As String
+Public num_xml As Integer
+Public arquivo, retornoexiste As Integer
+
+Sub open_xml()
+
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+    
+    Dim Nome, nomePlan As String
+    
+    Call loopArquivos
+        
+    Caminho = ActiveWorkbook.Path
+    nomePlan = ActiveWorkbook.Name
+    
+    arquivo = 1
+    
+    Sheets("Csv").Select
+    Cells.ClearContents
+    Range("A1").Select
+    
+    'On Error GoTo xmlNãoEncontrado
+
+    While arquivo <= num_xml
+    
+        Windows(nomePlan).Activate
+        Sheets("Xml").Activate
+        Cells.ClearContents
+        
+        Call VerificaArquivos
+        
+        If retornoexiste = 2 Then
+        
+            MsgBox "A pasta Carga não foi encontrada no diretório do arquivo", vbCritical, "Erro na leitura dos arquivos"
+            Exit Sub
+            
+        End If
+                   
+        If retornoexiste = 0 Then
+
+            arquivo = arquivo + 1
+            
+        Else
+            
+            ChDir Caminho & "\Carga"
+            Workbooks.OpenXML FileName:=Caminho & "\Carga\" & arquivo & ".xml", LoadOption:=xlXmlLoadImportToList
+            
+            Range("A1").Select
+            Range(Selection, ActiveCell.SpecialCells(xlLastCell)).Select
+            Selection.Copy
+            
+            Nome = ActiveWorkbook.Name
+            
+            Windows(nomePlan).Activate
+            Range("A1").PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                :=False, Transpose:=False
+            Range("A1").Select
+            
+            Windows(Nome).Activate
+            ActiveWindow.Close
+            
+            arquivo = arquivo + 1
+            
+            'copiar dados para aba csv
+            Sheets("Conversor Deva").Select
+            
+            Range("A2").Select
+            ActiveSheet.Range("$A$1:$j$22").AutoFilter Field:=10, Criteria1:="<>retirar lista"
+            
+            Range("J2").Select
+            Range(Selection, Selection.End(xlDown)).Select
+            Selection.Copy
+            Sheets("Csv").Select
+            Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                :=False, Transpose:=False
+            Range("A1").Select
+            Selection.End(xlDown).Select
+            Selection.Offset(1, 0).Select
+            
+            Sheets("Conversor Deva").Select
+            ActiveSheet.Range("$A$1:$j$22").AutoFilter Field:=10
+            Range("A2").Select
+            
+            retornoexiste = 0
+        
+        End If
+    
+    Wend
+
+    Call separa_csv
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+        
+'Exit Sub
+
+'xmlNãoEncontrado:
+    
+End Sub
+
+Private Sub limpa_tudo()
+
+    Cells.Select
+    Selection.ClearContents
+    Sheets("Painel").Select
+    Range("B3").Select
+    Sheets("Conversor Deva").Select
+    ActiveSheet.Range("$A$1:$J$22").AutoFilter Field:=10
+    Sheets("Csv").Select
+    Range("C12").Select
+    Selection.ClearContents
+    Sheets("Xml").Select
+    Range("A1").Select
+    
+End Sub
+Private Sub separa_csv()
+
+    Sheets("Csv").Select
+    
+    Sheets("Csv").Copy
+    Columns("A:A").Select
+    Selection.TextToColumns Destination:=Range("A1"), DataType:=xlDelimited, _
+        TextQualifier:=xlDoubleQuote, ConsecutiveDelimiter:=False, Tab:=True, _
+        Semicolon:=True, Comma:=False, Space:=False, Other:=False, FieldInfo _
+        :=Array(Array(1, 1), Array(2, 1), Array(3, 1), Array(4, 1), Array(5, 1), Array(6, 1), _
+        Array(7, 1), Array(8, 1), Array(9, 2)), TrailingMinusNumbers:=True
+    Cells.Select
+    Cells.EntireColumn.AutoFit
+    
+    Call testa_duplicados
+    
+End Sub
+Sub loopArquivos()
+
+    Dim nomeArquivo As String
+    Dim StrFileName As String
+    Dim StrNewFileName As String
+
+On Error Resume Next
+
+    Caminho = ActiveWorkbook.Path & "\Carga"
+
+    'Efetua a busca dos arquivos
+    nomeArquivo = Dir(Caminho & "\*.xml")
+    num_xml = 1
+    
+    Do While nomeArquivo <> ""
+        
+        Debug.Print nomeArquivo
+        
+        'Proximo Arquivo
+        StrFileName = Caminho & "\" & nomeArquivo
+        StrNewFileName = Caminho & "\" & num_xml & ".xml"
+
+        Name StrFileName As StrNewFileName
+    
+        num_xml = num_xml + 1
+    
+        nomeArquivo = Dir
+        
+    Loop
+    
+End Sub
+
+Sub testa_duplicados()
+
+    Dim num_ant As String
+    Dim num_nov As String
+    Dim prod_ant As String
+    Dim prod_nov As String
+    Dim range_num As Integer
+    Dim valor_cel As String
+    
+    range_num = 1
+    
+    Do While range_num
+    
+        If Range("c" & range_num).Value = "" Then
+        
+            Exit Do
+        
+        End If
+    
+        num_ant = Range("c" & range_num).Value
+        prod_ant = Range("b" & range_num).Value
+        
+        num_nov = Range("c" & (range_num + 1)).Value
+        prod_nov = Range("b" & (range_num + 1)).Value
+        
+        If (num_ant = num_nov) Then
+            
+            If (prod_ant = prod_nov) Then
+                
+                If (num_nov <> "") Then
+        
+                    Range(range_num & ":" & range_num).Select
+                    Selection.Delete Shift:=xlUp
+                    
+                    Range("c" & range_num).Select
+                    
+                    With Selection.Interior
+                        .Pattern = xlSolid
+                        .PatternColorIndex = xlAutomatic
+                        .Color = 5263615
+                        .TintAndShade = 0
+                        .PatternTintAndShade = 0
+                    End With
+        
+                End If
+        
+            End If
+            
+        End If
+        
+        Range("d" & range_num).Select
+        Selection.NumberFormat = "@"
+        valor_cel = Range("d" & range_num).Value
+        
+        range_num = range_num + 1
+        
+    Loop
+    
+    Columns("G:G").Select
+    Selection.Replace What:="1", Replacement:="'01", LookAt:=xlPart, _
+        SearchOrder:=xlByRows, MatchCase:=False, SearchFormat:=False, _
+        ReplaceFormat:=False
+    Selection.Replace What:="2", Replacement:="'02", LookAt:=xlPart, _
+        SearchOrder:=xlByRows, MatchCase:=False, SearchFormat:=False, _
+        ReplaceFormat:=False
+    Selection.Replace What:="3", Replacement:="'03", LookAt:=xlPart, _
+        SearchOrder:=xlByRows, MatchCase:=False, SearchFormat:=False, _
+        ReplaceFormat:=False
+    Selection.Replace What:="4", Replacement:="'04", LookAt:=xlPart, _
+        SearchOrder:=xlByRows, MatchCase:=False, SearchFormat:=False, _
+        ReplaceFormat:=False
+   
+    Columns("A:I").HorizontalAlignment = xlCenter
+        
+    Range("a1").Select
+    
+    ActiveSheet.Shapes.Range(Array("Right Arrow 1")).Delete
+
+End Sub
+
+    Private Sub VerificaArquivos()
+
+         Dim TheFile As String
+         Dim Results As String
+
+         TheFile = Caminho & "\Carga\" & arquivo & ".xml"
+         Results = Dir$(TheFile)
+
+         If Results = "" Then
+            retornoexiste = 0
+         Else
+            retornoexiste = 1
+         End If
+           
+    End Sub
+
+Sub open_xml_transporte()
+
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+    
+    Dim Nome, nomePlan As String
+    
+    Call loopArquivos
+        
+    Caminho = ActiveWorkbook.Path
+    nomePlan = ActiveWorkbook.Name
+    
+    arquivo = 1
+    
+    Sheets("Csv").Select
+    Cells.ClearContents
+    Range("A1").Select
+    
+    'On Error GoTo xmlNãoEncontrado
+
+    While arquivo <= num_xml
+    
+        Windows(nomePlan).Activate
+        Sheets("Xml").Activate
+        Cells.ClearContents
+        
+        Call VerificaArquivos
+        
+        If retornoexiste = 2 Then
+        
+            MsgBox "A pasta Carga não foi encontrada no diretório do arquivo", vbCritical, "Erro na leitura dos arquivos"
+            Exit Sub
+            
+        End If
+                   
+        If retornoexiste = 0 Then
+
+            arquivo = arquivo + 1
+            
+        Else
+            
+            ChDir Caminho & "\Carga"
+            Workbooks.OpenXML FileName:=Caminho & "\Carga\" & arquivo & ".xml", LoadOption:=xlXmlLoadImportToList
+            
+            Range("A1").Select
+            Range(Selection, ActiveCell.SpecialCells(xlLastCell)).Select
+            Selection.Copy
+            
+            Nome = ActiveWorkbook.Name
+            
+            Windows(nomePlan).Activate
+            Range("A1").PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                :=False, Transpose:=False
+            Range("A1").Select
+            
+            Windows(Nome).Activate
+            ActiveWindow.Close
+            
+            arquivo = arquivo + 1
+            
+            'copiar dados para aba csv
+            Sheets("Conversor Deva Transporte").Select
+            
+            Range("A2").Select
+            ActiveSheet.Range("$A$1:$k$22").AutoFilter Field:=11, Criteria1:="<>retirar lista"
+            Range("k2").Select
+            Range(Selection, Selection.End(xlDown)).Select
+            Selection.Copy
+            Sheets("Csv").Select
+            Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                :=False, Transpose:=False
+            Range("A1").Select
+            Selection.End(xlDown).Select
+            Selection.Offset(1, 0).Select
+            
+            Sheets("Conversor Deva Transporte").Select
+            ActiveSheet.Range("$A$1:$k$22").AutoFilter Field:=11
+            Range("A2").Select
+            
+            retornoexiste = 0
+        
+        End If
+    
+    Wend
+
+    Call separa_csv
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+        
+'Exit Sub
+
+'xmlNãoEncontrado:
+    
+End Sub
