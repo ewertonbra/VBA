@@ -1,0 +1,296 @@
+' Script criado por Éwerton Ramos em 07/2016
+
+' Objetos usados para trabalhar a estrutura da página
+Public IE() As Object, objElement As Object, objCollection As Object, td As Object, tr As Object, trObj As Object, tdObj As Object
+' variável usada para validar se o usuário usou um range maior que as linhas do Excel ou se o mesmo deixou os campos do frm em branco
+Public chkvazio As Long
+    
+Sub ChamaForm()
+
+    ' Chama o formulário, usei modeless para que o usuário conseguisse verificar qual linha ele deseja rodar
+    FrmSelecoes.Show vbModeless
+
+End Sub
+
+Public Sub ciclaTerminais(de As Long, ate As Long, periodolist As String)
+' A sub abaixo é utilizada para ciclar os usuários, senhas e sites de acordo com as seleções do usuário no form
+
+    Dim userlist As String, senhalist As String, sitelist As String, tipositelist As String ' interface com plan
+    Dim celatual As Long, ultCel As Long ' linha inicial e final da seleção
+    Dim oldActive As Worksheet ' recebe a guia principal
+    Dim caminholist As String ' recebe o caminho onde os relatórios extraído irão ser salvos
+    
+    ' recebe os dados da guia "Cadastro", para alterar basta alterar a célula D2
+    caminholist = Sheets("Cadastro").Range("D2").Value
+    ' inicia a variável prevendo nenhum erro
+    chkvazio = 0
+ 
+    ' oculta as movimentações na planilha para acelerar a execução
+    With Application
+        .ScreenUpdating = False
+        .DisplayAlerts = False
+    End With
+    
+    ' se o usuário não informa um período válido, fecha o programa
+    If periodolist = "" Or Not IsDate(periodolist) Then
+        MsgBox "Favor informar um período válido"
+        chkvazio = 1
+        Exit Sub
+    End If
+    
+    ' guarda qual a guia o sistema começou a rodar
+    Set oldActive = ActiveSheet
+    
+    oldActive.Activate
+    Range("a2").Select
+    
+    ' Testa se o usuário selecionou a opção de/até e se o mesmo informou algum dado, caso sim roda o sistema com essa visão
+    If de > 1 And ate > 1 Then
+        celatual = de
+        ultCel = ate
+    End If
+    
+    ' Testa se o usuário selecionou a opção de apenas uma pesquisa, caso sim roda o sistema com essa visão
+    If ate = 0 Then
+        celatual = de
+        ultCel = celatual
+    End If
+    
+    ' Testa se o usuário selecionou a opção de rodar todos, caso sim roda o sistema com essa visão
+    If de = 0 And ate = 0 Then
+        celatual = 2
+        ' ordena o sistema a identificar a última linha preenchida para limitar seus ciclos
+        If Range("a3").Value = "" Then
+            ultCel = 2
+        Else
+            Selection.End(xlDown).Select
+            ultCel = ActiveCell.Row
+        End If
+    End If
+    
+    ' Para a execução caso o usuário tenha selecionado uma linha maior que o limite do Excel
+    If celatual > 1000000 Then
+        MsgBox "O valor informado é maior que as células disponíveis no Excel"
+        chkvazio = 1
+        Exit Sub
+    End If
+    
+    ' Valida se o usuário informou alguma linha não preenchida para análise
+    If Range("a" & celatual).Value = "" Then
+        MsgBox "A célula selecionada está vazia!"
+        chkvazio = 1
+        Exit Sub
+    End If
+    
+    ' Cria um array de objetos do tipo "Internet Explorer"
+    ReDim IE(celatual To ultCel)
+    
+    ' É aqui que o sistema faz o ciclo dentro da tabela do excel, alimentado as variáveis e executando caso a caso
+    While celatual <= ultCel
+    
+        userlist = Range("c" & celatual).Value
+        senhalist = Range("d" & celatual).Value
+        tipositelist = Range("e" & celatual).Value
+        sitelist = Range("f" & celatual).Value
+        
+        ' Necessário criar e finalizar o IE antes da função chamada, por motivos obscuros do VB rs
+        Set IE(celatual) = CreateObject("InternetExplorer.Application")
+        
+        Call IE_Automation(userlist, senhalist, sitelist, caminholist, periodolist, celatual, tipositelist)
+        
+        ' Devido a maldita janela chamada pelo comando sair do Codif de SP tive de fazer a gambiarra abaixo rs
+        If tipositelist = "Codif SP" Then
+            Application.Wait (Now + TimeValue("0:00:02"))
+           ' SendKeys "{ENTER}"
+        Else
+' Comentei essa parte porque estava dando problema no site de MS, avaliar retorno - Ewerton 05/17
+'            Do While IE(celatual).Busy
+                Application.Wait DateAdd("s", 1, Now)
+'            Loop
+'            IE(celatual).Quit
+        End If
+        
+        ' limpa a memória
+        Set IE(celatual) = Nothing
+        
+        ' volta para a guia principal da planilha
+        oldActive.Activate
+        
+        celatual = celatual + 1
+        
+    Wend
+    
+    ' limpa toda a memória utilizada
+    Set objElement = Nothing
+    Set objCollection = Nothing
+    Set td = Nothing
+    Set tr = Nothing
+    Set trObj = Nothing
+    Set tdObj = Nothing
+    
+    ' haha tive de fazer esse salve para o Excel se desligar dos objetos criados, também por motivos obscuros do VB,
+    ' pois sem esse salve o sistema não consegue rodar novamente após uma execução.
+    ActiveWorkbook.Save
+        
+End Sub
+
+Private Sub IE_Automation(user As String, senha As String, site As String, caminho As String, periodo As String, ienumb As Long, tiposite As String)
+' a lógica aqui é criar um objeto do tipo IE, um objeto para receber os tags pai do HTML e outros objetos para receber seus filhos,
+' e logo após isso tomar ações, como clicar, inserir dados e etc...
+
+On Error GoTo handler
+
+    ' variáveis usadas para definir quais células irão receber os tables, tds e trs do HTML
+    Dim colUser As Integer
+    Dim linUser As String
+    
+    ' variável criada por motivos gerais de ciclagem, sem criatividade para um nome menos clichê rs
+    Dim i As Long
+
+    ' Direciona o carro de input para a célula A1
+    colUser = 1
+    linUser = 1
+        
+    ' necessário deixar o IE visível por causa da maledeta caixa de diálogo que é aberta no momento do clique no botão SAIR
+    ' se alguém souber como fazer em VB sem a necessidade do "ENTER" no final, gentileza entrar em contato: ewertonsnt@gmail.com
+    IE(ienumb).Visible = True
+    
+    ' Criar a guia a qual irá receber o relatório
+    Sheets.Add After:=Sheets(Sheets.Count)
+    ActiveSheet.Name = user
+    Sheets(user).Select
+    Range("A1").Select
+    
+    ' Envia o caminho para o acesso do IE
+    IE(ienumb).Navigate site
+
+    ' usado para ir alertando o usuário da execução
+    Application.StatusBar = "O site está sendo carregado, por favor aguarde..."
+    
+    ' Bloco de login/senha ------------------------------------------------------------------------------------------------------------
+    Do While IE(ienumb).Busy
+        Application.Wait DateAdd("s", 1, Now)
+    Loop
+    Application.StatusBar = "Inserindo as informações da tabela, por favor aguarde..."
+    Set objCollection = IE(ienumb).Document.getElementsByTagName("input")
+    i = 0
+    Do While i < objCollection.Length
+        If objCollection(i).Name = "txtLogin" Then
+            objCollection(i).Value = user
+        End If
+        If objCollection(i).Name = "txtSenha" Then
+            objCollection(i).Value = senha
+        End If
+        If objCollection(i).Type = "submit" Then 'And objCollection(i).Name = "btnLogin"
+            Set objElement = objCollection(i)
+            objElement.Click
+            Exit Do
+        End If
+        i = i + 1
+    Loop
+        
+    ' Bloco de seleção extrato --------------------------------------------------------------------------------------------------------
+    Do While IE(ienumb).Busy
+        Application.Wait DateAdd("s", 1, Now)
+    Loop
+    Application.StatusBar = "Usuário encontrado, trazendo dados por favor aguarde..."
+    Set objCollection = IE(ienumb).Document.getElementsByTagName("a")
+    i = 0
+    Do While i < objCollection.Length
+        If objCollection(i).ID = "lkbExtrato" Then
+            Set objElement = objCollection(i)
+            objElement.Click
+            Exit Do
+        End If
+        i = i + 1
+    Loop
+    
+' Descomente para rodar o codif por mês / mas não se esqueça de mudar o período para o formato mm/aaaa
+'    ' Bloco de seleção dia/mês ------------------------------------------------------------------------------------------------------
+'    Do While IE(ienumb).Busy
+'        Application.Wait DateAdd("s", 1, Now)
+'    Loop
+'    Set objCollection = IE(ienumb).Document.getElementsByTagName("input")
+'    i = 0
+'    Do While i < objCollection.Length
+'        If objCollection(i).ID = "rblRef_1" Then
+'            Set objElement = objCollection(i)
+'            objElement.Click
+'            Exit Do
+'        End If
+'        i = i + 1
+'    Loop
+    
+    ' Bloco de seleção do período ------------------------------------------------------------------------------------------------------
+    Do While IE(ienumb).Busy
+        Application.Wait DateAdd("s", 1, Now)
+    Loop
+    Set objCollection = IE(ienumb).Document.getElementsByTagName("input")
+    
+    i = 0
+    Do While i < objCollection.Length
+        If objCollection(i).Name = "txtData" Then
+            objCollection(i).Value = periodo
+        End If
+        If objCollection(i).Type = "submit" And objCollection(i).ID = "btnListar" Then
+            Set objElement = objCollection(i)
+            objElement.Click
+            objElement.Click
+            Exit Do
+        End If
+        i = i + 1
+    Loop
+    
+    ' Bloco de extração das tabelas ----------------------------------------------------------------------------------------------------
+    Do While IE(ienumb).Busy
+        Application.Wait DateAdd("s", 1, Now)
+    Loop
+    'Set objCollection = IE.Document.getElementsByTagName("table")
+    Set tr = IE(ienumb).Document.getElementsByTagName("tr")
+    For Each trObj In tr
+        Set td = trObj.getElementsByTagName("td")
+        For Each tdObj In td
+            Cells(linUser, colUser).Value = tdObj.INNERTEXT
+            colUser = colUser + 1
+        Next
+        colUser = 1
+        linUser = linUser + 1
+    Next
+
+    ' Bloco de sair -------------------------------------------------------------------------------------------------------------------
+    Do While IE(ienumb).Busy
+        Application.Wait DateAdd("s", 1, Now)
+    Loop
+    Set objCollection = IE(ienumb).Document.getElementsByTagName("a")
+    i = 0
+    Do While i < objCollection.Length
+        If objCollection(i).ID = "lkbSair" Then
+            Set objElement = objCollection(i)
+            objElement.Click
+            Exit Do
+        End If
+        i = i + 1
+    Loop
+    
+    ' reset da barra de status
+    Application.StatusBar = ""
+    
+    ' Salva o relatório extraído da internet no diretório informado no inicio do sistema
+    Sheets(user).Move
+    ChDir caminho
+    ActiveWorkbook.SaveAs Filename:=caminho & Application.PathSeparator & user & " - " & tiposite, _
+        FileFormat:=xlOpenXMLWorkbook, CreateBackup:=False
+    ActiveWindow.Close
+    Range("A2").Select
+    
+    IE(ienumb).Quit
+
+    Exit Sub
+
+handler:
+
+    MsgBox "O Internet explorer falhou!"
+    chkvazio = 1
+    Exit Sub
+        
+End Sub
